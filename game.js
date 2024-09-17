@@ -90,7 +90,7 @@ class Board {
                     }
 
                     // Colisión con el fondo del tablero
-                    if (posY + y >= this.height - 3) {
+                    if (posY + y >= this.height - 5) {
                         return true;  // Colisión con el fondo del tablero
                     }
 
@@ -285,21 +285,21 @@ class Tetris {
         this.rotateKey = null;
         this.score = 0;  // Inicializar puntuación
         this.linesToComplete = 5;  // Líneas necesarias para ganar
-        this.timeLimit = 40;  // Tiempo límite en segundos
+        this.timeLimit = 60;  // Tiempo límite en segundos
         this.timeRemaining = this.timeLimit;  // Tiempo restante
         this.timerEvent = null;  // Evento del temporizador
         this.moveDelay = 150;  // Retardo entre movimientos laterales
         this.lastMoveTime = 0;  // Última vez que se movió la pieza
         this.fastDrop = false;  // Bandera para detectar el movimiento rápido hacia abajo
         this.isFastDropping = false;  // Para detectar si ya se está realizando el fast drop
-        this.dropSpeed = 300;  // Velocidad de caída por defecto
+        this.dropSpeed = 1000;  // Velocidad de caída por defecto
         this.speedIncreaseFactor = 50;  // Aumento de velocidad por línea completada
         this.gameOverFlag = false;  // Bandera para indicar si el juego terminó
         this.touchControls = {};  // Guardará las referencias de los botones táctiles
     }
 
     preload() {
-        this.scene.load.image('fondo', 'fondo.jpeg');
+        this.scene.load.image('fondo', 'fondo.jpg');
         this.scene.load.image('caja', 'caja.png');
         this.scene.load.image('idle', 'idle.jpg');  // Cargar la imagen de bienvenida
         this.scene.load.image('ganaste', 'ganaste.png');  // Cargar la imagen de victoria
@@ -355,57 +355,74 @@ class Tetris {
         const buttonSize = 150;
         const screenHeight = this.scene.scale.height;
         const screenWidth = this.scene.scale.width;
-
+    
         // Botón izquierda
         this.touchControls.left = this.scene.add.image(100, screenHeight - 150, 'left')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.left.on('pointerdown', () => this.board.movePiece(this.currentPiece, -1, 0));
-
+    
         // Botón derecha
         this.touchControls.right = this.scene.add.image(300, screenHeight - 150, 'right')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.right.on('pointerdown', () => this.board.movePiece(this.currentPiece, 1, 0));
-
+    
         // Botón rotar
         this.touchControls.rotate = this.scene.add.image(screenWidth - 200, screenHeight - 150, 'rotate')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.rotate.on('pointerdown', () => this.board.rotatePiece(this.currentPiece));
-
+    
         // Botón bajar rápido
         this.touchControls.down = this.scene.add.image(screenWidth - 400, screenHeight - 150, 'down')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
-        this.touchControls.down.on('pointerdown', () => this.isFastDropping = true);
-        this.touchControls.down.on('pointerup', () => this.isFastDropping = false);
+    
+        // Fast drop handling
+        this.touchControls.down.on('pointerdown', () => {
+            this.isFastDropping = true;  // Activa el fast drop
+        });
+        this.touchControls.down.on('pointerup', () => {
+            this.isFastDropping = false;  // Desactiva el fast drop
+        });
+        this.touchControls.down.on('pointerout', () => {
+            this.isFastDropping = false;  // Desactiva el fast drop si el dedo o cursor sale del botón
+        });
+        this.touchControls.down.on('pointerupoutside', () => {
+            this.isFastDropping = false;  // Desactiva el fast drop si el dedo o cursor suelta fuera del botón
+        });
     }
-
+    
     update(time) {
         if (this.gameOverFlag || !this.currentPiece) {
             return;  // Si el juego ha terminado o no hay pieza actual, no hacer nada
         }
-
-        // Movimiento hacia abajo
+    
+        // Fast drop handling - Keep the speed low while isFastDropping is true
         let dropSpeed = this.isFastDropping ? 50 : this.dropSpeed;  // Acelerar si se presiona el botón de bajar
-
         if (time > this.nextDropTime) {
             this.nextDropTime = time + dropSpeed;
             if (this.currentPiece) {
                 this.board.movePieceDown(this.currentPiece);
             }
         }
-
-        // Movimiento rápido hacia abajo (Fast Drop)
-        if (this.cursors.down.isDown && !this.isFastDropping) {
-            this.isFastDropping = true;  // Iniciar el fast drop si no está activo
-        } else if (!this.cursors.down.isDown) {
-            this.isFastDropping = false;  // Desactivar el fast drop cuando se suelta la tecla
+    
+        // Movimiento lateral
+        if (time > this.lastMoveTime + this.moveDelay) {
+            if (this.cursors.left.isDown) {
+                this.board.movePiece(this.currentPiece, -1, 0);
+                this.lastMoveTime = time;  // Actualizar el tiempo del último movimiento
+            } else if (this.cursors.right.isDown) {
+                this.board.movePiece(this.currentPiece, 1, 0);
+                this.lastMoveTime = time;  // Actualizar el tiempo del último movimiento
+            }
         }
-
+    
         this.board.drawPiece(this.currentPiece);
     }
+    
+    
 
     updateScore(linesCleared) {
         this.score += linesCleared;
