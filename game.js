@@ -14,6 +14,7 @@ class WelcomeScreen {
         this.idleImage = this.scene.add.image(this.scene.scale.width / 2, this.scene.scale.height / 2, 'idle');
         this.idleImage.setDisplaySize(this.scene.scale.width, this.scene.scale.height);
         
+        
         // Hacer que la imagen sea interactiva y empezar el juego al hacer clic
         this.idleImage.setInteractive();
         this.idleImage.on('pointerdown', () => {
@@ -34,6 +35,7 @@ class Board {
     }
 
     createBoard() {
+        this.scene.sound.play('introSound');
         const board = [];
         for (let y = 0; y < this.height; y++) {
             board[y] = [];
@@ -155,6 +157,7 @@ class Board {
         const shape = piece.shape;
 
         // Colocar la pieza en la grilla
+        this.scene.sound.play('pieceSetSound');
         for (let y = 0; y < shape.length; y++) {
             for (let x = 0; x < shape[y].length; x++) {
                 if (shape[y][x]) {
@@ -275,6 +278,11 @@ class Piece {
     }
 }
 
+
+
+let timeLimit = 60; // Límite de tiempo global
+let linesToComplete = 5; // Número de líneas para ganar global
+
 class Tetris {
     constructor(scene) {
         this.scene = scene;
@@ -284,12 +292,13 @@ class Tetris {
         this.cursors = null;
         this.rotateKey = null;
         this.score = 0;  // Inicializar puntuación
-        this.linesToComplete = 5;  // Líneas necesarias para ganar
-        this.timeLimit = 60;  // Tiempo límite en segundos
-        this.timeRemaining = this.timeLimit;  // Tiempo restante
+
+        this.timeRemaining = timeLimit;  // Tiempo restante
         this.timerEvent = null;  // Evento del temporizador
         this.moveDelay = 150;  // Retardo entre movimientos laterales
         this.lastMoveTime = 0;  // Última vez que se movió la pieza
+        this.rotateDelay = 200;  // Retardo entre rotaciones
+        this.lastRotateTime = 0;  // Última vez que se rotó la pieza
         this.fastDrop = false;  // Bandera para detectar el movimiento rápido hacia abajo
         this.isFastDropping = false;  // Para detectar si ya se está realizando el fast drop
         this.dropSpeed = 1000;  // Velocidad de caída por defecto
@@ -301,14 +310,23 @@ class Tetris {
     preload() {
         this.scene.load.image('fondo', 'fondo.jpg');
         this.scene.load.image('caja', 'caja.png');
-        this.scene.load.image('idle', 'idle.jpg');  // Cargar la imagen de bienvenida
-        this.scene.load.image('ganaste', 'ganaste.png');  // Cargar la imagen de victoria
-        this.scene.load.image('perdiste', 'perdiste.png');  // Cargar la imagen de derrota
-        this.scene.load.image('continuar', 'continuar.png');  // Cargar la imagen del botón continuar
-        this.scene.load.image('left', 'left.png');  // Cargar el botón izquierda
-        this.scene.load.image('right', 'right.png');  // Cargar el botón derecha
-        this.scene.load.image('rotate', 'rotate.png');  // Cargar el botón rotar
-        this.scene.load.image('down', 'down.png');  // Cargar el botón bajar rápido
+        this.scene.load.image('idle', 'idle.jpg');
+        this.scene.load.image('ganaste', 'ganaste.png');
+        this.scene.load.image('perdiste', 'perdiste.png');
+        this.scene.load.image('continuar', 'continuar.png');
+        this.scene.load.image('left', 'left.png');
+        this.scene.load.image('right', 'right.png');
+        this.scene.load.image('rotate', 'rotate.png');
+        this.scene.load.image('down', 'down.png');
+
+        // Cargar sonidos
+        this.scene.load.audio('pieceSetSound', 'assets/PieceSet.mp3');
+        this.scene.load.audio('buttonSound', 'assets/GamingMenuClick.mp3');
+        this.scene.load.audio('lineClearSound', 'assets/PixelGamePulsating.mp3');
+        this.scene.load.audio('winSound', 'assets/PixelGameWontheGame.mp3');
+        this.scene.load.audio('loseSound', 'assets/GameOverFailure.mp3');
+        this.scene.load.audio('introSound', 'assets/BitJingle.mp3');
+        
     }
 
     create() {
@@ -316,25 +334,23 @@ class Tetris {
         fondo.setDisplaySize(this.scene.scale.width, this.scene.scale.height);
 
         this.board = new Board(10, 20, this.scene);
-        this.currentPiece = new Piece(this.scene);  // Inicialización correcta de la primera pieza
+        this.currentPiece = new Piece(this.scene);
         this.nextDropTime = 0;
 
         this.cursors = this.scene.input.keyboard.createCursorKeys();
         this.rotateKey = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP);
 
-        // Mostrar score y temporizador en pantalla
         const screenWidth = this.scene.scale.width;
-        this.scoreText = this.scene.add.text(screenWidth / 2 + 250, 80, `Líneas: 0/${this.linesToComplete}`, {
+        this.scoreText = this.scene.add.text(screenWidth / 2 + 250, 80, `Líneas: 0/${linesToComplete}`, {
             fontSize: '62px',
             fill: '#fff'
         }).setOrigin(0.5, 0);
-        
+
         this.timerText = this.scene.add.text(screenWidth / 2 + 250, 20, `Tiempo: ${this.timeRemaining}`, {
             fontSize: '62px',
             fill: '#fff'
         }).setOrigin(0.5, 0);
 
-        // Crear temporizador
         this.timerEvent = this.scene.time.addEvent({
             delay: 1000,
             callback: this.updateTimer,
@@ -342,12 +358,10 @@ class Tetris {
             loop: true
         });
 
-        // Escuchar eventos
         this.scene.events.on('newPiece', () => this.generateNewPiece());
         this.scene.events.on('linesCleared', (linesCleared) => this.updateScore(linesCleared));
         this.scene.events.on('gameOver', () => this.gameOver());
 
-        // Añadir controles en pantalla para dispositivos táctiles
         this.createTouchControls();
     }
 
@@ -355,84 +369,78 @@ class Tetris {
         const buttonSize = 150;
         const screenHeight = this.scene.scale.height;
         const screenWidth = this.scene.scale.width;
-    
-        // Botón izquierda
+
         this.touchControls.left = this.scene.add.image(100, screenHeight - 150, 'left')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.left.on('pointerdown', () => this.board.movePiece(this.currentPiece, -1, 0));
-    
-        // Botón derecha
+
         this.touchControls.right = this.scene.add.image(300, screenHeight - 150, 'right')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.right.on('pointerdown', () => this.board.movePiece(this.currentPiece, 1, 0));
-    
-        // Botón rotar
+
         this.touchControls.rotate = this.scene.add.image(screenWidth - 200, screenHeight - 150, 'rotate')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.rotate.on('pointerdown', () => this.board.rotatePiece(this.currentPiece));
-    
-        // Botón bajar rápido
+
         this.touchControls.down = this.scene.add.image(screenWidth - 400, screenHeight - 150, 'down')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
-    
-        // Fast drop handling
+
         this.touchControls.down.on('pointerdown', () => {
-            this.isFastDropping = true;  // Activa el fast drop
+            this.isFastDropping = true;
         });
         this.touchControls.down.on('pointerup', () => {
-            this.isFastDropping = false;  // Desactiva el fast drop
-        });
-        this.touchControls.down.on('pointerout', () => {
-            this.isFastDropping = false;  // Desactiva el fast drop si el dedo o cursor sale del botón
-        });
-        this.touchControls.down.on('pointerupoutside', () => {
-            this.isFastDropping = false;  // Desactiva el fast drop si el dedo o cursor suelta fuera del botón
+            this.isFastDropping = false;
         });
     }
-    
+
     update(time) {
         if (this.gameOverFlag || !this.currentPiece) {
-            return;  // Si el juego ha terminado o no hay pieza actual, no hacer nada
+            return;
         }
-    
-        // Fast drop handling - Keep the speed low while isFastDropping is true
-        let dropSpeed = this.isFastDropping ? 50 : this.dropSpeed;  // Acelerar si se presiona el botón de bajar
+
+        let dropSpeed = this.isFastDropping ? 50 : this.dropSpeed;
+
         if (time > this.nextDropTime) {
             this.nextDropTime = time + dropSpeed;
-            if (this.currentPiece) {
-                this.board.movePieceDown(this.currentPiece);
-            }
+            this.board.movePieceDown(this.currentPiece);
         }
-    
-        // Movimiento lateral
+
         if (time > this.lastMoveTime + this.moveDelay) {
             if (this.cursors.left.isDown) {
                 this.board.movePiece(this.currentPiece, -1, 0);
-                this.lastMoveTime = time;  // Actualizar el tiempo del último movimiento
+                this.lastMoveTime = time;
             } else if (this.cursors.right.isDown) {
                 this.board.movePiece(this.currentPiece, 1, 0);
-                this.lastMoveTime = time;  // Actualizar el tiempo del último movimiento
+                this.lastMoveTime = time;
             }
         }
-    
+
+        if (time > this.lastRotateTime + this.rotateDelay) {
+            if (this.rotateKey.isDown) {
+                this.board.rotatePiece(this.currentPiece);
+                this.lastRotateTime = time;
+            }
+        }
+
         this.board.drawPiece(this.currentPiece);
     }
-    
-    
 
     updateScore(linesCleared) {
         this.score += linesCleared;
-        this.scoreText.setText(`Líneas: ${this.score}/${this.linesToComplete}`);
+        this.scoreText.setText(`Líneas: ${this.score}/${linesToComplete}`);
 
-        // Aumentar velocidad con cada línea completada
+        if (linesCleared > 0) {
+            this.scene.sound.play('lineClearSound');
+        }
+
         this.dropSpeed = Math.max(100, this.dropSpeed - this.speedIncreaseFactor * linesCleared);
 
-        if (this.score >= this.linesToComplete) {
-            this.winGame();  // Ganar si se completan las líneas necesarias
+        if (this.score >= linesToComplete) {
+            this.winGame();
         }
     }
 
@@ -441,63 +449,59 @@ class Tetris {
         this.timerText.setText(`Tiempo: ${this.timeRemaining}`);
 
         if (this.timeRemaining <= 0) {
-            this.scene.events.emit('gameOver');  // Emitir evento de fin del juego si se acaba el tiempo
+            this.scene.events.emit('gameOver');
         }
     }
 
     winGame() {
-        console.log("¡Has ganado!");
-        this.timerEvent.remove();  // Detener el temporizador
-        this.showEndScreen('ganaste');  // Mostrar la imagen de victoria
+        this.timerEvent.remove();
+        this.scene.sound.play('winSound');
+        this.showEndScreen('ganaste');
     }
 
     gameOver() {
-        console.log("Has perdido. Fin del juego.");
-        this.showEndScreen('perdiste');  // Mostrar la imagen de derrota
+        this.scene.sound.play('loseSound');
+        this.showEndScreen('perdiste');
         if (this.timerEvent) {
-            this.timerEvent.remove();  // Detener el temporizador
+            this.timerEvent.remove();
         }
     }
 
     showEndScreen(imageKey) {
-        // Limpiar el tablero y detener la generación de piezas
         this.gameOverFlag = true;
-        this.board.clearPreviousPieces();  // Limpiar piezas en movimiento
-        this.board.redrawFixedPieces();    // Limpiar piezas fijas
+        this.board.clearPreviousPieces();
+        this.board.redrawFixedPieces();
 
         const endImage = this.scene.add.image(this.scene.scale.width / 2, this.scene.scale.height / 2, imageKey);
         endImage.setDisplaySize(this.scene.scale.width, this.scene.scale.height);
 
-        // Agregar el botón de continuar
         const continueButton = this.scene.add.image(this.scene.scale.width / 2, this.scene.scale.height / 1.5, 'continuar');
-        continueButton.setDisplaySize(200, 100);
+        continueButton.setDisplaySize(717, 160);
         continueButton.setInteractive();
 
         continueButton.on('pointerdown', () => {
-            this.resetGame();  // Reiniciar el juego al hacer clic en continuar
+            this.scene.sound.play('buttonSound');
+            this.resetGame();
         });
     }
 
     resetGame() {
-        // Destruir todos los objetos gráficos actuales
         this.scene.children.removeAll();
-        
-        // Reiniciar variables de juego
         this.score = 0;
-        this.timeRemaining = this.timeLimit;
+        this.timeRemaining = timeLimit;
         this.dropSpeed = 300;
         this.gameOverFlag = false;
 
-        // Reiniciar el juego desde la pantalla de bienvenida
         this.scene.scene.restart();
     }
 
     generateNewPiece() {
-        this.currentPiece = new Piece(this.scene);  // Generar la nueva pieza correctamente
+        this.currentPiece = new Piece(this.scene);
     }
 }
 
-window.onload = function() {
+
+function startGame() {
     const config = {
         type: Phaser.AUTO,
         width: 1080,
@@ -516,29 +520,17 @@ window.onload = function() {
     };
 
     const game = new Phaser.Game(config);
-    let tetris = null;
-    let welcomeScreen;
-
-    let gameStarted = false;  // Bandera para controlar cuándo el juego está activo
 
     function preload() {
-        welcomeScreen = new WelcomeScreen(this);
         tetris = new Tetris(this);
-        welcomeScreen.preload();
         tetris.preload();
     }
 
     function create() {
-        // Crear la pantalla de bienvenida
-        welcomeScreen.create(() => {
-            gameStarted = true;  // El juego empieza
-            tetris.create();  // Iniciar el juego cuando se toque la pantalla
-        });
+        tetris.create();
     }
 
     function update(time) {
-        if (gameStarted && tetris) {
-            tetris.update(time);  // Solo actualizar el juego cuando esté activo
-        }
+        tetris.update(time);
     }
 }
