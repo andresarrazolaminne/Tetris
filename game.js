@@ -92,7 +92,7 @@ class Board {
                     }
 
                     // Colisión con el fondo del tablero
-                    if (posY + y >= this.height - 5) {
+                    if (posY + y >= this.height - 3) {
                         return true;  // Colisión con el fondo del tablero
                     }
 
@@ -281,7 +281,9 @@ class Piece {
 
 
 let timeLimit = 60; // Límite de tiempo global
-let linesToComplete = 5; // Número de líneas para ganar global
+let linesToComplete = 3; // Número de líneas para ganar global
+let gameState="idle";
+
 
 class Tetris {
     constructor(scene) {
@@ -370,22 +372,22 @@ class Tetris {
         const screenHeight = this.scene.scale.height;
         const screenWidth = this.scene.scale.width;
 
-        this.touchControls.left = this.scene.add.image(100, screenHeight - 150, 'left')
+        this.touchControls.left = this.scene.add.image(100, screenHeight - 1600, 'left')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.left.on('pointerdown', () => this.board.movePiece(this.currentPiece, -1, 0));
 
-        this.touchControls.right = this.scene.add.image(300, screenHeight - 150, 'right')
+        this.touchControls.right = this.scene.add.image(980, screenHeight - 1600, 'right')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.right.on('pointerdown', () => this.board.movePiece(this.currentPiece, 1, 0));
 
-        this.touchControls.rotate = this.scene.add.image(screenWidth - 200, screenHeight - 150, 'rotate')
+        this.touchControls.rotate = this.scene.add.image(380, screenHeight - 1600, 'rotate')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
         this.touchControls.rotate.on('pointerdown', () => this.board.rotatePiece(this.currentPiece));
 
-        this.touchControls.down = this.scene.add.image(screenWidth - 400, screenHeight - 150, 'down')
+        this.touchControls.down = this.scene.add.image(screenWidth - 400, screenHeight - 1600, 'down')
             .setInteractive()
             .setDisplaySize(buttonSize, buttonSize);
 
@@ -482,6 +484,7 @@ class Tetris {
         continueButton.on('pointerdown', () => {
             this.scene.sound.play('buttonSound');
             this.resetGame();
+            this.changeScene(WelcomeScreen);
         });
     }
 
@@ -520,17 +523,36 @@ function startGame() {
     };
 
     const game = new Phaser.Game(config);
+    
 
     function preload() {
+        welcomeScreen = new WelcomeScreen(this);
+        welcomeScreen.preload();
+
         tetris = new Tetris(this);
         tetris.preload();
     }
 
     function create() {
+        gameState="idle";
+        console.log(gameState);
+        if(gameState==="idle"){
+            welcomeScreen.create(startgame);
+        }
+        //tetris.create();
+    }
+
+    function startgame(){
         tetris.create();
+        gameState="game";
+        console.log(this.state);
     }
 
     function update(time) {
-        tetris.update(time);
+        console.log(gameState);
+        if(gameState=="game"){
+            tetris.update(time);
+            
+        }
     }
 }
